@@ -93,6 +93,12 @@
             transform: translateY(0);
         }
 
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .profile-section {
             display: none;
         }
@@ -225,6 +231,20 @@
             margin-top: 10px;
         }
 
+        .example-url {
+            text-align: center;
+            color: white;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+
+        .example-url code {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2rem;
@@ -247,12 +267,16 @@
         <div class="header">
             <h1>🚀 SkillRack Profile Analyzer</h1>
             <p>Analyze your SkillRack profile performance</p>
+            <div class="example-url">
+                Example: <code>https://www.skillrack.com/faces/candidate/profile.xhtml?id=12345</code>
+            </div>
         </div>
 
         <div class="card input-section">
             <input type="url" class="url-input" id="profileUrl" 
-                   placeholder="Paste your SkillRack profile URL here...">
-            <button class="btn" onclick="fetchProfile()">
+                   placeholder="Paste your SkillRack profile URL here..." 
+                   value="">
+            <button class="btn" onclick="fetchProfile()" id="analyzeBtn">
                 <i class="fas fa-chart-line"></i> Analyze Profile
             </button>
             <div class="performance-time" id="performanceTime"></div>
@@ -294,7 +318,7 @@
             <div class="profile-info">
                 <h3><i class="fas fa-info-circle"></i> Profile Information</h3>
                 <p>Last updated: <span id="lastUpdated">Just now</span></p>
-                <p>Profile URL: <a href="#" id="profileLink" style="color: white; text-decoration: underline;">View on SkillRack</a></p>
+                <p>Profile URL: <a href="#" id="profileLink" target="_blank" style="color: white; text-decoration: underline;">View on SkillRack</a></p>
             </div>
         </div>
     </div>
@@ -309,9 +333,16 @@
             const success = document.getElementById('success');
             const profileSection = document.getElementById('profileSection');
             const performanceTime = document.getElementById('performanceTime');
+            const analyzeBtn = document.getElementById('analyzeBtn');
             
             if (!url) {
                 showError('Please enter a SkillRack profile URL');
+                return;
+            }
+
+            // Validate URL format
+            if (!url.includes('skillrack.com') || !url.includes('id=')) {
+                showError('Please enter a valid SkillRack profile URL. Example: https://www.skillrack.com/faces/candidate/profile.xhtml?id=12345');
                 return;
             }
             
@@ -321,6 +352,8 @@
             loading.style.display = 'block';
             profileSection.style.display = 'none';
             performanceTime.textContent = '';
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
             
             fetchStartTime = performance.now();
             
@@ -336,7 +369,7 @@
                 const data = await response.json();
                 
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to fetch profile');
+                    throw new Error(data.error || `Failed to fetch profile (Status: ${response.status})`);
                 }
                 
                 const fetchTime = performance.now() - fetchStartTime;
@@ -346,9 +379,12 @@
                 showSuccess('Profile analyzed successfully!');
                 
             } catch (err) {
+                console.error('Fetch error:', err);
                 showError(err.message);
             } finally {
                 loading.style.display = 'none';
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = '<i class="fas fa-chart-line"></i> Analyze Profile';
             }
         }
         
@@ -376,6 +412,9 @@
             const error = document.getElementById('error');
             error.textContent = message;
             error.style.display = 'block';
+            
+            // Scroll to error
+            error.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         
         function showSuccess(message) {
@@ -392,6 +431,13 @@
             document.getElementById('profileUrl').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     fetchProfile();
+                }
+            });
+            
+            // Clear default value on focus
+            document.getElementById('profileUrl').addEventListener('focus', function() {
+                if (this.value === 'https://www.skillrack.com/faces/candidate/profile.xhtml?id=') {
+                    this.value = '';
                 }
             });
         });
