@@ -73,6 +73,11 @@ def fetch_profile():
         logger.error("URL is empty")
         return jsonify({'error': 'URL is required'}), 400
     
+    # Validate URL format
+    if not is_valid_skillrack_url(url):
+        logger.error(f"Invalid SkillRack URL format: {url}")
+        return jsonify({'error': 'Invalid SkillRack URL format. Please use a valid SkillRack profile URL.'}), 400
+    
     try:
         # Check if profile exists in database (fast query)
         existing_data = supabase_request('GET', 'skillrack_profiles', {
@@ -99,13 +104,17 @@ def fetch_profile():
         html_content = fetch_page(url)
         if not html_content:
             logger.error("Failed to fetch HTML content from SkillRack")
-            return jsonify({'error': 'Failed to fetch profile data from SkillRack. Please check the URL.'}), 400
+            return jsonify({'error': 'Failed to fetch profile data from SkillRack. Please check if the profile exists and is public.'}), 400
             
         lines = clean_html(html_content)
         logger.debug(f"Extracted {len(lines)} lines from HTML")
         
-        if len(lines) < 30:
-            logger.error(f"Not enough data extracted. Expected at least 30 lines, got {len(lines)}")
+        # Debug: Print first 40 lines to see what we're getting
+        for i, line in enumerate(lines[:40]):
+            logger.debug(f"Line {i}: {line}")
+        
+        if len(lines) < 20:
+            logger.error(f"Not enough data extracted. Expected at least 20 lines, got {len(lines)}")
             return jsonify({'error': 'Incomplete profile data received. The profile might be private or the URL is incorrect.'}), 400
             
         profile_data = extract_data(url, lines)
@@ -139,15 +148,48 @@ def fetch_profile():
 def health_check():
     return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
 
+def is_valid_skillrack_url(url):
+    """Check if the URL is a valid SkillRack profile URL"""
+    patterns = [
+        r'https?://(www\.)?skillrack\.com/profile/\d+/[a-f0-9]+',  # New format
+        r'https?://(www\.)?skillrack\.com/faces/candidate/profile\.xhtml\?id=\d+',  # Old format
+    ]
+    return any(re.search(pattern, url, re.IGNORECASE) for pattern in patterns)
+
+def extract_profile_id(url):
+    """Extract profile ID from both URL formats"""
+    # New format: http://www.skillrack.com/profile/500444/c3456f579d36f135ec68b08338299ebc1276f723
+    new_format_match = re.search(r'skillrack\.com/profile/(\d+)', url)
+    if new_format_match:
+        return new_format_match.group(1)
+    
+    # Old format: https://www.skillrack.com/faces/candidate/profile.xhtml?id=12345
+    old_format_match = re.search(r'[?&]id=(\d+)', url)
+    if old_format_match:
+        return old_format_match.group(1)
+    
+    # Fallback: use hash of URL
+    return str(hash(url))
+
 def fetch_page(url):
     """Fetch webpage with timeout and error handling"""
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
         }
         response = requests.get(url, timeout=15, headers=headers)
         logger.debug(f"SkillRack response status: {response.status_code}")
-        return response.text if response.status_code == 200 else None
+        if response.status_code == 200:
+            logger.debug("Successfully fetched SkillRack page")
+            return response.text
+        else:
+            logger.error(f"SkillRack returned status code: {response.status_code}")
+            return None
     except requests.exceptions.RequestException as e:
         logger.error(f"Request exception: {e}")
         return None
@@ -158,7 +200,7 @@ def clean_html(html_content):
         return []
         
     soup = BeautifulSoup(html_content, 'html.parser')
-    for tag in soup(['script', 'style', 'nav', 'header', 'footer']):
+    for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'meta', 'link']):
         tag.decompose()
     
     text = soup.get_text(separator='\n')
@@ -170,30 +212,78 @@ def to_int(value):
     if isinstance(value, int):
         return value
     try:
-        return int(re.sub(r'[^\d]', '', str(value)))
+        # Remove any non-digit characters and convert
+        cleaned = re.sub(r'[^\d]', '', str(value))
+        return int(cleaned) if cleaned else 0
     except:
         return 0
 
+def find_pattern_in_lines(lines, patterns):
+    """Find value by multiple possible patterns"""
+    for pattern in patterns:
+        for i, line in enumerate(lines):
+            if pattern in line.lower():
+                # Return the next line or extract number from current line
+                if i + 1 < len(lines):
+                    return lines[i + 1]
+                else:
+                    return line
+    return '0'
+
 def extract_data(url, lines):
-    """Extract and structure profile data - ONLY REQUIRED FIELDS"""
-    profile_id = re.search(r"id=(\d+)", url)
+    """Extract and structure profile data - handles new SkillRack format"""
+    profile_id = extract_profile_id(url)
     
-    # Safe indexing with fallbacks
-    def get_line(index, default=''):
-        return lines[index] if len(lines) > index else default
+    logger.debug("Searching for profile data in lines...")
+    
+    # More flexible pattern matching for the new SkillRack format
+    name = find_pattern_in_lines(lines, ['name:', 'candidate name:', 'profile of'])
+    college = find_pattern_in_lines(lines, ['college:', 'institution:', 'university:'])
+    
+    # Find numbers - look for patterns in the text
+    dc = 0
+    dt = 0
+    code_track = 0
+    
+    for i, line in enumerate(lines):
+        line_lower = line.lower()
+        
+        # Daily Challenge
+        if any(pattern in line_lower for pattern in ['daily challenge', 'dc solved']):
+            dc = to_int(line)
+            # Also check next line if current doesn't have number
+            if dc == 0 and i + 1 < len(lines):
+                dc = to_int(lines[i + 1])
+        
+        # Daily Test  
+        elif any(pattern in line_lower for pattern in ['daily test', 'dt solved']):
+            dt = to_int(line)
+            if dt == 0 and i + 1 < len(lines):
+                dt = to_int(lines[i + 1])
+        
+        # Code Track (problems solved)
+        elif any(pattern in line_lower for pattern in ['problems solved', 'total solved', 'code track']):
+            code_track = to_int(line)
+            if code_track == 0 and i + 1 < len(lines):
+                code_track = to_int(lines[i + 1])
+    
+    # Calculate points based on SkillRack formula
+    points = (code_track + dc) * 2 + dt * 20
     
     data = {
-        "id": profile_id.group(1) if profile_id else str(hash(url)),
-        "name": get_line(9),
-        "college": get_line(12),
-        "dc": to_int(get_line(31)),
-        "dt": to_int(get_line(33)),
-        "points": (to_int(get_line(29)) + to_int(get_line(31))) * 2 + to_int(get_line(33)) * 20,
+        "id": profile_id,
+        "name": name if name != '0' else 'Unknown',
+        "college": college if college != '0' else 'Unknown',
+        "dc": dc,
+        "dt": dt,
+        "points": points,
         "last_fetched": datetime.now().isoformat(),
         "profile_url": url
     }
     
     logger.debug(f"Extracted data - Name: {data['name']}, College: {data['college']}, Points: {data['points']}")
+    logger.debug(f"DC: {dc}, DT: {dt}, Code Track: {code_track}")
+    
     return data
 
 if __name__ == '__main__':
