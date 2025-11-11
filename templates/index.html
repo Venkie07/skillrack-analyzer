@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkillRack Profile Analyzer</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        .input-section {
+            text-align: center;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 50px;
+            background: #f8f9fa;
+            font-size: 1.1rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+
+        .url-input:focus {
+            outline: none;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .profile-section {
+            display: none;
+        }
+
+        .profile-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .user-info h2 {
+            color: #333;
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+        }
+
+        .user-info p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .points-badge {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .points-badge .points {
+            font-size: 2rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            transition: transform 0.3s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card i {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-card .label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .profile-info {
+            background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .success {
+            background: #51cf66;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .performance-time {
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .profile-header {
+                flex-direction: column;
+                text-align: center;
+                gap: 20px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 SkillRack Profile Analyzer</h1>
+            <p>Analyze your SkillRack profile performance</p>
+        </div>
+
+        <div class="card input-section">
+            <input type="url" class="url-input" id="profileUrl" 
+                   placeholder="Paste your SkillRack profile URL here...">
+            <button class="btn" onclick="fetchProfile()">
+                <i class="fas fa-chart-line"></i> Analyze Profile
+            </button>
+            <div class="performance-time" id="performanceTime"></div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Fetching your profile data...</p>
+        </div>
+
+        <div class="error" id="error"></div>
+        <div class="success" id="success"></div>
+
+        <div class="card profile-section" id="profileSection">
+            <div class="profile-header">
+                <div class="user-info">
+                    <h2 id="userName">John Doe</h2>
+                    <p id="userCollege">ABC College of Engineering</p>
+                </div>
+                <div class="points-badge">
+                    <span class="points" id="totalPoints">0</span>
+                    Total Points
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <i class="fas fa-fire"></i>
+                    <span class="value" id="dcCount">0</span>
+                    <span class="label">Daily Challenge</span>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-trophy"></i>
+                    <span class="value" id="dtCount">0</span>
+                    <span class="label">Daily Test</span>
+                </div>
+            </div>
+
+            <div class="profile-info">
+                <h3><i class="fas fa-info-circle"></i> Profile Information</h3>
+                <p>Last updated: <span id="lastUpdated">Just now</span></p>
+                <p>Profile URL: <a href="#" id="profileLink" style="color: white; text-decoration: underline;">View on SkillRack</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let fetchStartTime;
+
+        async function fetchProfile() {
+            const url = document.getElementById('profileUrl').value.trim();
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const success = document.getElementById('success');
+            const profileSection = document.getElementById('profileSection');
+            const performanceTime = document.getElementById('performanceTime');
+            
+            if (!url) {
+                showError('Please enter a SkillRack profile URL');
+                return;
+            }
+            
+            // Reset
+            error.style.display = 'none';
+            success.style.display = 'none';
+            loading.style.display = 'block';
+            profileSection.style.display = 'none';
+            performanceTime.textContent = '';
+            
+            fetchStartTime = performance.now();
+            
+            try {
+                const response = await fetch('/api/profile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to fetch profile');
+                }
+                
+                const fetchTime = performance.now() - fetchStartTime;
+                performanceTime.textContent = `Fetched in ${fetchTime.toFixed(0)}ms`;
+                
+                displayProfile(data);
+                showSuccess('Profile analyzed successfully!');
+                
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        function displayProfile(data) {
+            // Update profile information
+            document.getElementById('userName').textContent = data.name || 'N/A';
+            document.getElementById('userCollege').textContent = data.college || 'N/A';
+            document.getElementById('totalPoints').textContent = data.points || 0;
+            document.getElementById('dcCount').textContent = data.dc || 0;
+            document.getElementById('dtCount').textContent = data.dt || 0;
+            
+            // Format last updated time
+            const lastUpdated = new Date(data.last_fetched);
+            document.getElementById('lastUpdated').textContent = lastUpdated.toLocaleString();
+            
+            // Set profile link
+            const profileLink = document.getElementById('profileLink');
+            profileLink.href = data.profile_url;
+            
+            // Show profile section
+            document.getElementById('profileSection').style.display = 'block';
+        }
+        
+        function showError(message) {
+            const error = document.getElementById('error');
+            error.textContent = message;
+            error.style.display = 'block';
+        }
+        
+        function showSuccess(message) {
+            const success = document.getElementById('success');
+            success.textContent = message;
+            success.style.display = 'block';
+            setTimeout(() => {
+                success.style.display = 'none';
+            }, 3000);
+        }
+        
+        // Add enter key support
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('profileUrl').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    fetchProfile();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
