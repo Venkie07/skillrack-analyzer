@@ -1,13 +1,12 @@
 # app.py
 from flask import Flask, request, jsonify, render_template
-from playwright.sync_api import sync_playwright
 from flask_cors import CORS
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 import os
-import time
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -64,56 +63,43 @@ def fetch_profile():
     print("🔍 Scraping fresh data for:", url)
 
     html_content = fetch_page(url)
-    if not html_content or "cf-browser-verification" in html_content.lower():
+    if not html_content:
         return jsonify({'error': 'Cloudflare blocked the request. Try again.'}), 400
 
-    if not html_content:
-        return jsonify({'error': 'SkillRack blocked the request'}), 400
-
     lines = clean_html(html_content)
-
     profile = extract_data(url, lines)
 
     return jsonify(profile)
 
 
-
-# ---------- FETCH PAGE ----------
+# ---------- CLOUDSCRAPER PAGE FETCH ----------
 def fetch_page(url):
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-gpu",
-                    "--disable-dev-shm-usage",
-                    "--disable-setuid-sandbox"
-                ]
-            )
+        scraper = cloudscraper.create_scraper(
+            browser={
+                "browser": "chrome",
+                "platform": "windows",
+                "mobile": False
+            }
+        )
 
-            page = browser.new_page()
+        response = scraper.get(url, timeout=30)
 
-            page.set_default_timeout(60000)
+        if response.status_code != 200:
+            print("Cloudflare Block:", response.status_code)
+            return None
 
-            page.goto(url, wait_until="domcontentloaded")
-
-            # Wait for Skillrack resume content to appear
-            page.wait_for_load_state("networkidle")
-
-            html = page.content()
-            browser.close()
-            return html
+        return response.text
 
     except Exception as e:
-        print("Playwright Error:", e)
+        print("CloudScraper Error:", e)
         return None
-
 
 
 # ---------- CLEAN HTML ----------
 def clean_html(html):
     soup = BeautifulSoup(html, "html.parser")
+
     for t in soup(['script', 'style']):
         t.decompose()
 
@@ -131,10 +117,7 @@ def to_int(v):
 
 # ---------- UNIVERSAL ID + KEY EXTRACTOR ----------
 def extract_data(url, lines):
-    # For profile URL pattern
     match1 = re.search(r"profile/(\d+)/([a-f0-9]+)", url)
-
-    # For resume URL pattern
     match2 = re.search(r"id=(\d+)&key=([a-f0-9]+)", url)
 
     if match1:
@@ -164,8 +147,5 @@ def extract_data(url, lines):
 
 # ---------- RUN SERVER ----------
 if __name__ == "__main__":
-    print("🚀 SkillRack Analyzer Running…")
+    print("🚀 SkillRack Analyzer Running with CloudScraper…")
     app.run(debug=True, host="0.0.0.0", port=5000)
-
-
-
