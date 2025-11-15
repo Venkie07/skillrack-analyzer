@@ -1,11 +1,10 @@
-# render.yaml
 services:
   - type: web
     name: skillrack-analyzer
     env: python
+    buildCommand: "./render-build.sh"
+    startCommand: "gunicorn app:app"
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
     envVars:
       - key: SUPABASE_URL
         sync: false
