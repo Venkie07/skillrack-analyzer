@@ -1,5 +1,6 @@
 # app.py
 from flask import Flask, request, jsonify, render_template
+from playwright.sync_api import sync_playwright
 from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
@@ -49,7 +50,6 @@ def index():
     return render_template('index.html')
 
 
-# ---------- MAIN API ----------
 @app.route('/api/profile', methods=['POST'])
 def fetch_profile():
     data = request.get_json()
@@ -60,45 +60,53 @@ def fetch_profile():
 
     if "skillrack.com" not in url:
         return jsonify({'error': 'Invalid SkillRack URL'}), 400
+
     print("🔍 Scraping fresh data for:", url)
 
-    # Fetch the HTML page
     html_content = fetch_page(url)
-    print("HTML SIZE:", len(html_content))
-    print(html_content[:500])
+    if not html_content or "cf-browser-verification" in html_content.lower():
+        return jsonify({'error': 'Cloudflare blocked the request. Try again.'}), 400
+
     if not html_content:
-        print("⚠️ Warning: Empty HTML from SkillRack, continuing.")
-        html_content = ""  # still try to parse
+        return jsonify({'error': 'SkillRack blocked the request'}), 400
 
-
-    # Clean & extract data
     lines = clean_html(html_content)
+
     profile = extract_data(url, lines)
 
-    # Save to Supabase (optional)
-    supabase_request('POST', 'skillrack_profiles?on_conflict=id', profile)
-
     return jsonify(profile)
+
 
 
 # ---------- FETCH PAGE ----------
 def fetch_page(url):
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Accept": "text/html",
-        }
-        res = requests.get(url, headers=headers, timeout=15)
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--disable-setuid-sandbox"
+                ]
+            )
 
-        # Accept page even if partially loaded
-        if res.status_code == 200 and len(res.text) > 1000:
-            return res.text
-        else:
-            print("❌ SkillRack returned very small HTML (blocked by Cloudflare)")
-            return res.text  # return anyway, don’t block
+            page = browser.new_page()
+
+            page.set_default_timeout(60000)
+
+            page.goto(url, wait_until="domcontentloaded")
+
+            # Wait for Skillrack resume content to appear
+            page.wait_for_load_state("networkidle")
+
+            html = page.content()
+            browser.close()
+            return html
 
     except Exception as e:
-        print("❌ Request error:", e)
+        print("Playwright Error:", e)
         return None
 
 
@@ -158,5 +166,6 @@ def extract_data(url, lines):
 if __name__ == "__main__":
     print("🚀 SkillRack Analyzer Running…")
     app.run(debug=True, host="0.0.0.0", port=5000)
+
 
 
