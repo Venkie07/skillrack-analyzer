@@ -66,7 +66,9 @@ def fetch_profile():
     # Fetch the HTML page
     html_content = fetch_page(url)
     if not html_content:
-        return jsonify({'error': 'SkillRack profile may be private or unavailable'}), 400
+        print("⚠️ Warning: Empty HTML from SkillRack, continuing.")
+        html_content = ""  # still try to parse
+
 
     # Clean & extract data
     lines = clean_html(html_content)
@@ -82,13 +84,22 @@ def fetch_profile():
 def fetch_page(url):
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "text/html"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Accept": "text/html",
         }
         res = requests.get(url, headers=headers, timeout=15)
-        return res.text if res.status_code == 200 else None
-    except:
+
+        # Accept page even if partially loaded
+        if res.status_code == 200 and len(res.text) > 1000:
+            return res.text
+        else:
+            print("❌ SkillRack returned very small HTML (blocked by Cloudflare)")
+            return res.text  # return anyway, don’t block
+
+    except Exception as e:
+        print("❌ Request error:", e)
         return None
+
 
 
 # ---------- CLEAN HTML ----------
@@ -146,3 +157,4 @@ def extract_data(url, lines):
 if __name__ == "__main__":
     print("🚀 SkillRack Analyzer Running…")
     app.run(debug=True, host="0.0.0.0", port=5000)
+
