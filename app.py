@@ -60,11 +60,12 @@ def fetch_profile():
 
     if "skillrack.com" not in url:
         return jsonify({'error': 'Invalid SkillRack URL'}), 400
-
     print("🔍 Scraping fresh data for:", url)
 
     # Fetch the HTML page
     html_content = fetch_page(url)
+    print("HTML SIZE:", len(html_content))
+    print(html_content[:500])
     if not html_content:
         print("⚠️ Warning: Empty HTML from SkillRack, continuing.")
         html_content = ""  # still try to parse
@@ -157,4 +158,5 @@ def extract_data(url, lines):
 if __name__ == "__main__":
     print("🚀 SkillRack Analyzer Running…")
     app.run(debug=True, host="0.0.0.0", port=5000)
+
 
